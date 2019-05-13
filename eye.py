@@ -5,7 +5,7 @@ import numpy as np
 from skimage import feature
 from skimage.morphology import square
 
-image_list=[("eye2.jpg","eye2_1.jpg"),("eye7.jpg","eye7_1.jpg"),("eye8.jpg","eye8_1.jpg"),("eye9.jpg","eye9_1.jpg"),("eye11.jpg","eye11_1.jpg"),("eye12.jpg","eye12_1.jpg"),("eye13.jpg","eye13_1.jpg"),("eye5.jpg","eye5_1.jpg"),("eye6.jpg","eye6_1.jpg"),("eye14.jpg","eye14_1.jpg"),("eye16.jpg","eye16_1.jpg")]
+image_list=[("eye2.jpg","eye2_1.jpg"),("eye7.jpg","eye7_1.jpg"),("eye8.jpg","eye8_1.jpg"),("eye9.jpg","eye9_1.jpg"),("eye11.jpg","eye11_1.jpg"),("eye12.jpg","eye12_1.jpg"),("eye13.jpg","eye13_1.jpg"),("eye16.jpg","eye16_1.jpg"),("eye5.jpg","eye5_1.jpg"),("eye6.jpg","eye6_1.jpg"),("eye14.jpg","eye14_1.jpg")]
 
 #filtruje zdjecie zostawiajac kolor czerwony
 def mask(img):
@@ -183,10 +183,13 @@ def compare(img,template,circles,kk,image2,red_image):
     print(tp, fp, fn, tn)
     print('dobrze zakwalifikowanych przypadkow', (tp+tn)/(tp+tn+fp+fn))
     print('prezyzja',tp/(tp+fp))
-    print('czulosc',tp/(tp+fn), '\n')
-    ax=fig.add_subplot(3, 5, kk)
+    print('czulosc',tp/(tp+fn))
+    print('swoistosc',tn/(tn+fp), '\n')
+    ax=fig.add_subplot(3, 4, kk)
     ax.axis('off')
     ax.imshow(image2)
+    
+    return tp/(tp+fp), tp/(tp+fn), tn/(tn+fp)
         
 #przez to, ze oczodul jest "uciety", wykrywamy 2 poziome linie oznaczajace krawedzie oczodolu
 def detect_background_line(img):
@@ -232,6 +235,9 @@ def use_red_pixels(red):
 ii=1
 plt.gray()
 fig = plt.figure(figsize=(15,12))
+mean_recall=0
+mean_sensitivity=0
+mean_specificity=0
     
 for im, tem in image_list:
     image = cv2.imread('Image/'+im)
@@ -263,7 +269,11 @@ for im, tem in image_list:
     closed=morphology.binary_closing(canny)
     eroted=morphology.binary_erosion(closed,square(3))
     
-    compare(eroted,img_template,circles,ii,image.copy(),red_image)
+    r,sen,spec=compare(eroted,img_template,circles,ii,image.copy(),red_image)
+    if ii<9: #3 ostatnie zdjecia zle wyppadaja, sa aby pokazac, kiedy algorytm sobie nie radzi
+        mean_recall+=r
+        mean_sensitivity+=sen
+        mean_specificity+=spec
     ii+=1
     
     '''if ii==5:
@@ -282,6 +292,9 @@ for im, tem in image_list:
         ax.axis('off')
         ax.imshow(eroted)'''
 
+ii=8
+print('srednia precyzja, czulosc, swoistosc:')
+print(mean_recall/ii,mean_sensitivity/ii,mean_specificity/ii)
 plt.show()
 plt.close()
 
