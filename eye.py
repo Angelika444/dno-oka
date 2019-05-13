@@ -5,8 +5,8 @@ import numpy as np
 from skimage import feature
 from skimage.morphology import square
 
-image = cv2.imread("eye7.jpg")
-img_template=cv2.imread("eye7_1.jpg")
+image = cv2.imread("eye2.jpg")
+img_template=cv2.imread("eye2_1.jpg")
 img_template = color.rgb2gray(img_template)
 img_height=image.shape[0]
 img_width=image.shape[1]
@@ -175,7 +175,13 @@ def compare(img,template,circles,kk,image2,red_image):
                                 image2[h,w]=[0,255,0]
                             else:
                                 tn+=1
+                elif template[h][w]>0.5:
+                    fn+=1
+            elif template[h][w]>0.5:
+                fn+=1
+                    
                                 
+    print('ilosc naczynek:', (tp+fn)/img_width/img_height)
     print('ze zdjecia z tylko czerwonymi pikselami dobrze i zle zakwalifikowanych pikseli: ')
     print(red_pos, red_neg)
     print('tp fp fn tn:')
