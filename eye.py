@@ -9,6 +9,8 @@ image = cv2.imread("eye7.jpg")
 #cv2.imshow("obraz wejsciowy",img)
 img_height=image.shape[0]
 img_width=image.shape[1]
+no_eye=[]
+
 
 def mask(img):
     imgHSV=cv2.cvtColor(img,cv2.COLOR_BGR2HSV)
@@ -147,9 +149,9 @@ def sharpening(img):
     sharpened = cv2.filter2D(img, -1, kernel_sharpening)
     #cv2.imshow('sh',sharpened)
     #cv2.waitKey(0)
-    return img
+    return sharpened
 
-def compare(img,template,circles,kk):
+def compare(img,template,circles,kk,image2):
     
     tp=0
     tn=0
@@ -158,28 +160,29 @@ def compare(img,template,circles,kk):
     for w in range(img_width):
         for h in range(img_height):            
             if(in_circle(circles,w,h,2)):
-                if img[h][w]:
-                    if template[h][w]>0.5:
-                        tp+=1
-                        image[h,w]=[0,0,255]
+                if h>limit_down and h<limit_up:
+                    if img[h][w]:
+                        if template[h][w]>0.5:
+                            tp+=1
+                            image2[h,w]=[0,0,255]
+                        else:
+                            fp+=1
+                            image2[h,w]=[0,255,0]
                     else:
-                        fp+=1
-                        image[h,w]=[0,255,0]
-                else:
-                    if template[h][w]>0.5:
-                        fn+=1
-                        image[h,w]=[255,0,0]
-
-                    else:
-                        tn+=1
+                        if template[h][w]>0.5:
+                            fn+=1
+                            image2[h,w]=[255,0,0]
+    
+                        else:
+                            tn+=1
     print(tp, fp, fn, tn, (tp+tn)/(tp+tn+fp+fn))
     if kk>0:
         ax=fig.add_subplot(3, 2, kk)
         ax.axis('off')
-        ax.imshow(image)
-    else:
-        cv2.imshow('comparing',image)
-        cv2.waitKey(0)
+        ax.imshow(image2)
+    #else:
+        #cv2.imshow('comparing',image2)
+        #cv2.waitKey(0)
 
 #cv2.imshow('basic',img)
 #cv2.waitKey(0)
@@ -214,24 +217,53 @@ high_thresh=max(high_thresh,130)
 lowThresh = 0.5*high_thresh
 #print(lowThresh,high_thresh)
 edges = cv2.Canny(image,lowThresh,high_thresh)
-cv2.imshow('edges',edges)
-cv2.waitKey(0)
+#cv2.imshow('edges',edges)
+#cv2.waitKey(0)
 
 closing = cv2.morphologyEx(edges, cv2.MORPH_CLOSE,kernel)
-cv2.imshow('closing',closing)
-cv2.waitKey(0)
+#cv2.imshow('closing',closing)
+#cv2.waitKey(0)
 
 #kernel = np.ones((3,3),np.uint8)
 erosion = cv2.erode(closing,kernel,iterations = 1)
-cv2.imshow('erosion',erosion)
-
+#cv2.imshow('erosion',erosion)
+'''
 print('tp fp tn fn:')
 print('opencv close')
-compare(closing,img_template,circles,0)
+compare(closing,img_template,circles,0,image.copy())
 print('opencv close+erode')
-compare(erosion,img_template,circles,0)
-cv2.waitKey(0)
+compare(erosion,img_template,circles,0,image.copy())
+#cv2.waitKey(0)'''
 
+
+def detect_background_line(img,image2):
+    max_count1=0
+    max_count2=0
+    row1=0
+    row2=0
+    for h in range(img_height):
+        count=0
+        for w in range(img_width):
+            if img[h,w]:
+                count+=1
+        if count>max_count1:
+            max_count1=count
+            row1=h
+        elif count>max_count2:
+            max_count2=count
+            row2=h
+    image2[row1,:]=[255,0,0]
+    image2[row2,:]=[0,255,0]
+    ax=fig.add_subplot(3, 2, 4)
+    ax.axis('off')
+    ax.imshow(image2)
+    for w in range(img_width):
+        no_eye.append((row1,w))
+        no_eye.append((row2,w))
+    limit_up=max(row1,row2)
+    limit_down=min(row1,row2)
+    return limit_down, limit_up
+            
 '''cv2.imwrite('edges-50-150.jpg',edges)
 minLineLength=100
 lines = cv2.HoughLinesP(image=edges,rho=1,theta=np.pi/180, threshold=100,lines=np.array([]), minLineLength=minLineLength,maxLineGap=80)
@@ -255,7 +287,8 @@ cv2.waitKey(0)'''
 #img=io.imread("Image.jpg")
 #img = color.rgb2gray(img)
 
-
+plt.gray()
+fig = plt.figure(figsize=(20,12))
 image=io.imread("Image2.jpg")
 img2 = color.rgb2gray(image)
 img2=blur_background(img2)
@@ -263,14 +296,13 @@ img2=blur_background(img2)
 #im mniejsza sigma, tym wiecej krawedzi wykrywa
 #canny = feature.canny(img, sigma=0.7)
 canny2 = feature.canny(img2, sigma=0.7)
+limit_down,limit_up=detect_background_line(canny2,image.copy())
 mor=morphology.binary_closing(canny2)
 mor2=morphology.binary_erosion(mor,square(2))
 #canny2=morphology.binary_erosion(canny2)
 
 
 
-plt.gray()
-fig = plt.figure(figsize=(20,12))
 ax=fig.add_subplot(3, 2, 1)
 ax.axis('off')
 ax.imshow(canny2)
@@ -282,9 +314,9 @@ ax.axis('off')
 ax.imshow(mor2)
 
 print('skimage close')
-compare(mor,img_template,circles,5)
+compare(mor,img_template,circles,5,image.copy())
 print('skimage close+erode')
-compare(mor2,img_template,circles,6)
+compare(mor2,img_template,circles,6,image.copy())
 
 plt.show()
 plt.close()
