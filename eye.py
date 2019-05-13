@@ -11,13 +11,22 @@ img_template = color.rgb2gray(img_template)
 img_height=image.shape[0]
 img_width=image.shape[1]
 
+#filtruje zdjecie zostawiajac kolor czerwony
 def mask(img):
     imgHSV=cv2.cvtColor(img,cv2.COLOR_BGR2HSV)
-    lower_red=np.array([0,180,150])
-    upper_red=np.array([10,255,255])
+    
+    sumS=0
+    for w in range(img_width):
+        for h in range(img_height):
+            sumS+=imgHSV[h,w][1]
+    
+    meanS=int(sumS/img_width/img_height)
+                
+    lower_red=np.array([0,meanS,100])
+    upper_red=np.array([7,255,255])
     mask1=cv2.inRange(imgHSV, lower_red,upper_red) #wybiera piksele, które są czerwone
     
-    lower_red2=np.array([160,180,150])
+    lower_red2=np.array([160,meanS,100])
     upper_red2=np.array([179,255,255])
     mask2=cv2.inRange(imgHSV, lower_red2,upper_red2)#wybiera piksele, które są czerwone
     
@@ -26,6 +35,7 @@ def mask(img):
     
     #cv2.imshow('onlyred',imgRed)
     #cv2.waitKey(0)
+    return imgRed
     
 #rozjasnia obraz i nasyca barwe
 def brightness(img):
@@ -131,16 +141,18 @@ def sharpening(img):
     return sharpened
 
 #porownuje przetworzony obraz z wzorcem, na ktorym zaznaczone sa naczynka, oblicza miary efektywnosci przetwarzania
-def compare(img,template,circles,kk,image2): 
+def compare(img,template,circles,kk,image2,red_image): 
     tp=0
     tn=0
     fp=0
     fn=0
+    red_pos=0
+    red_neg=0
     for w in range(img_width):
         for h in range(img_height):            
-            if(in_circle(circles,w,h,2)):
-                if h>limit_down+1 and h<limit_up-1:
-                    if img[h][w]:
+            if(in_circle(circles,w,h,2)): #jesli piksel znajduje sie wewnatrz oczodolu
+                if h>limit_down+1 and h<limit_up-1: #jesli piksel znajduje sie wewnatrz 'scietego' oczodolu
+                    if img[h][w]: #piksel na przetworzonym zdjeciu jest naczynkiem
                         if template[h][w]>0.5:
                             tp+=1
                             image2[h,w]=[0,0,255]
@@ -148,13 +160,29 @@ def compare(img,template,circles,kk,image2):
                             fp+=1
                             image2[h,w]=[0,255,0]
                     else:
-                        if template[h][w]>0.5:
-                            fn+=1
-                            image2[h,w]=[255,0,0]
-    
+                        if template[h][w]>0.5: 
+                            if red_pixels(red_image,h,w):#jezeli na zdjeciu z kolorem czerwonym jest to naczynko
+                                red_pos+=1
+                                tp+=1
+                                image2[h,w]=[0,0,255]
+                            else:
+                                fn+=1 
+                                image2[h,w]=[255,0,0]
                         else:
-                            tn+=1
-    print(tp, fp, fn, tn, (tp+tn)/(tp+tn+fp+fn))
+                            if red_pixels(red_image,h,w):
+                                red_neg+=1
+                                fp+=1
+                                image2[h,w]=[0,255,0]
+                            else:
+                                tn+=1
+                                
+    print('ze zdjecia z tylko czerwonymi pikselami dobrze i zle zakwalifikowanych pikseli: ')
+    print(red_pos, red_neg)
+    print('tp fp fn tn:')
+    print(tp, fp, fn, tn)
+    print('dobrze zakwalifikowanych przypadkow', (tp+tn)/(tp+tn+fp+fn))
+    print('prezyzja',tp/(tp+fn))
+    print('czulosc',tp/(tp+fp))
     ax=fig.add_subplot(3, 3, kk)
     ax.axis('off')
     ax.imshow(image2)
@@ -183,10 +211,17 @@ def detect_background_line(img):
             limit_up=h
     return limit_down, limit_up
 
+def red_pixels(red,h,w):
+    if red[h,w][2]>50:
+        return True
+    else:
+        return False
 
-image=brightness(image)
+image=brightness(image)   
 circles=detect_circle(image.copy())
 image=color_filter(image,circles)
+sharped=sharpening(image.copy())
+red_image=mask(sharped)
 
 #przejscie z opencv na skimage
 cv2.imwrite( "Image2.jpg", image);         
@@ -203,11 +238,11 @@ limit_down,limit_up=detect_background_line(canny)
 #wlasciwe przetwarzanie: laplace,canny, zamkniecie, erozja
 laplace = filters.laplace(img2)
 #im mniejsza sigma, tym wiecej krawedzi wykrywa
-canny=feature.canny(laplace,sigma=0.9)
+canny=feature.canny(laplace,sigma=0.85)
 closed=morphology.binary_closing(canny)
 eroted=morphology.binary_erosion(closed,square(3))
 
-compare(eroted,img_template,circles,5,image.copy())
+compare(eroted,img_template,circles,5,image.copy(),red_image)
 
 #wizualizuje wyniki
 ax=fig.add_subplot(3, 3, 1)
