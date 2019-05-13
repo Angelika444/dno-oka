@@ -5,11 +5,7 @@ import numpy as np
 from skimage import feature
 from skimage.morphology import square
 
-image = cv2.imread("eye2.jpg")
-img_template=cv2.imread("eye2_1.jpg")
-img_template = color.rgb2gray(img_template)
-img_height=image.shape[0]
-img_width=image.shape[1]
+image_list=[("eye2.jpg","eye2_1.jpg"),("eye7.jpg","eye7_1.jpg"),("eye8.jpg","eye8_1.jpg"),("eye9.jpg","eye9_1.jpg"),("eye11.jpg","eye11_1.jpg"),("eye12.jpg","eye12_1.jpg"),("eye13.jpg","eye13_1.jpg"),("eye5.jpg","eye5_1.jpg"),("eye6.jpg","eye6_1.jpg"),("eye14.jpg","eye14_1.jpg"),("eye16.jpg","eye16_1.jpg")]
 
 #filtruje zdjecie zostawiajac kolor czerwony
 def mask(img):
@@ -50,17 +46,15 @@ def brightness(img):
     meanS=sumS/img_width/img_height
     meanV=sumV/img_width/img_height
     
-    if meanV<150:
-        alfa=150/meanV
-        for w in range(img_width):
-            for h in range(img_height):
-                imgHSV[h,w][2]=min(int(imgHSV[h,w][2]*alfa),255)
-                
-    if meanS<200:
-        alfa=200/meanS
-        for w in range(img_width):
-            for h in range(img_height):
-                imgHSV[h,w][1]=min(int(imgHSV[h,w][1]*alfa),255)
+    alfa=150/meanV
+    for w in range(img_width):
+        for h in range(img_height):
+            imgHSV[h,w][2]=min(int(imgHSV[h,w][2]*alfa),255)
+
+    alfa=200/meanS
+    for w in range(img_width):
+        for h in range(img_height):
+            imgHSV[h,w][1]=min(int(imgHSV[h,w][1]*alfa),255)
     
     img2=cv2.cvtColor(imgHSV,cv2.COLOR_HSV2BGR)
     #cv2.imshow('jasniejszy', img2)
@@ -148,6 +142,7 @@ def compare(img,template,circles,kk,image2,red_image):
     fn=0
     red_pos=0
     red_neg=0
+    use=use_red_pixels(red_image)
     for w in range(img_width):
         for h in range(img_height):            
             if(in_circle(circles,w,h,2)): #jesli piksel znajduje sie wewnatrz oczodolu
@@ -161,7 +156,7 @@ def compare(img,template,circles,kk,image2,red_image):
                             image2[h,w]=[0,255,0]
                     else:
                         if template[h][w]>0.5: 
-                            if red_pixels(red_image,h,w):#jezeli na zdjeciu z kolorem czerwonym jest to naczynko
+                            if red_pixels(red_image,h,w,use):#jezeli na zdjeciu z kolorem czerwonym jest to naczynko
                                 red_pos+=1
                                 tp+=1
                                 image2[h,w]=[0,0,255]
@@ -169,7 +164,7 @@ def compare(img,template,circles,kk,image2,red_image):
                                 fn+=1 
                                 image2[h,w]=[255,0,0]
                         else:
-                            if red_pixels(red_image,h,w):
+                            if red_pixels(red_image,h,w,use):
                                 red_neg+=1
                                 fp+=1
                                 image2[h,w]=[0,255,0]
@@ -187,9 +182,9 @@ def compare(img,template,circles,kk,image2,red_image):
     print('tp fp fn tn:')
     print(tp, fp, fn, tn)
     print('dobrze zakwalifikowanych przypadkow', (tp+tn)/(tp+tn+fp+fn))
-    print('prezyzja',tp/(tp+fn))
-    print('czulosc',tp/(tp+fp))
-    ax=fig.add_subplot(3, 3, kk)
+    print('prezyzja',tp/(tp+fp))
+    print('czulosc',tp/(tp+fn), '\n')
+    ax=fig.add_subplot(3, 5, kk)
     ax.axis('off')
     ax.imshow(image2)
         
@@ -217,52 +212,75 @@ def detect_background_line(img):
             limit_up=h
     return limit_down, limit_up
 
-def red_pixels(red,h,w):
-    if red[h,w][2]>50:
+def red_pixels(red,h,w,use):
+    if red[h,w][2]>50 and use:
         return True
     else:
         return False
 
-image=brightness(image)   
-circles=detect_circle(image.copy())
-image=color_filter(image,circles)
-sharped=sharpening(image.copy())
-red_image=mask(sharped)
-
-#przejscie z opencv na skimage
-cv2.imwrite( "Image2.jpg", image);         
-image=io.imread("Image2.jpg")
-img2 = color.rgb2gray(image)
-img2=blur_background(img2, circles)
-
+def use_red_pixels(red):
+    count=0
+    for w in range(img_width):
+        for h in range(img_height):
+            if red_pixels(red,h,w,True):
+                count+=1
+    if count<200:
+        return True
+    else:
+        return False
+    
+ii=1
 plt.gray()
 fig = plt.figure(figsize=(15,12))
-#do wykrycia poziomych krawedzi oczodolu, bo z tego filtru najlepiej wykrywa
-canny = feature.canny(img2, sigma=0.5)
-limit_down,limit_up=detect_background_line(canny)
-
-#wlasciwe przetwarzanie: laplace,canny, zamkniecie, erozja
-laplace = filters.laplace(img2)
-#im mniejsza sigma, tym wiecej krawedzi wykrywa
-canny=feature.canny(laplace,sigma=0.85)
-closed=morphology.binary_closing(canny)
-eroted=morphology.binary_erosion(closed,square(3))
-
-compare(eroted,img_template,circles,5,image.copy(),red_image)
-
-#wizualizuje wyniki
-ax=fig.add_subplot(3, 3, 1)
-ax.axis('off')
-ax.imshow(laplace)
-ax=fig.add_subplot(3, 3, 2)
-ax.axis('off')
-ax.imshow(canny)
-ax=fig.add_subplot(3, 3, 3)
-ax.axis('off')
-ax.imshow(closed)
-ax=fig.add_subplot(3, 3, 4)
-ax.axis('off')
-ax.imshow(eroted)
+    
+for im, tem in image_list:
+    image = cv2.imread('Image/'+im)
+    img_template=cv2.imread('Image/'+tem)
+    img_template = color.rgb2gray(img_template)
+    img_height=image.shape[0]
+    img_width=image.shape[1]
+    
+    image=brightness(image)   
+    circles=detect_circle(image.copy())
+    image=color_filter(image,circles)
+    sharped=sharpening(image.copy())
+    red_image=mask(sharped)
+    
+    #przejscie z opencv na skimage
+    cv2.imwrite( "Image/image.jpg", image);         
+    image=io.imread("Image/image.jpg")
+    img2 = color.rgb2gray(image)
+    img2=blur_background(img2, circles)
+    
+    #do wykrycia poziomych krawedzi oczodolu, bo z tego filtru najlepiej wykrywa
+    canny = feature.canny(img2, sigma=0.5)
+    limit_down,limit_up=detect_background_line(canny)
+    
+    #wlasciwe przetwarzanie: laplace,canny, zamkniecie, erozja
+    laplace = filters.laplace(img2)
+    #im mniejsza sigma, tym wiecej krawedzi wykrywa
+    canny=feature.canny(laplace,sigma=0.85)
+    closed=morphology.binary_closing(canny)
+    eroted=morphology.binary_erosion(closed,square(3))
+    
+    compare(eroted,img_template,circles,ii,image.copy(),red_image)
+    ii+=1
+    
+    '''if ii==5:
+        fig2 = plt.figure(figsize=(15,12))
+        #wizualizuje wyniki
+        ax=fig2.add_subplot(3, 3, 1)
+        ax.axis('off')
+        ax.imshow(laplace)
+        ax=fig2.add_subplot(3, 3, 2)
+        ax.axis('off')
+        ax.imshow(canny)
+        ax=fig2.add_subplot(3, 3, 3)
+        ax.axis('off')
+        ax.imshow(closed)
+        ax=fig2.add_subplot(3, 3, 4)
+        ax.axis('off')
+        ax.imshow(eroted)'''
 
 plt.show()
 plt.close()
